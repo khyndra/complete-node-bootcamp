@@ -1,7 +1,5 @@
 const fs = require('fs');
 
-//We should always include the version of the API
-//JSON.parse converts json files into JS objects
 const tours = JSON.parse(
   fs.readFileSync(`${__dirname}/../dev-data/data/tours-simple.json`)
 );
@@ -37,8 +35,6 @@ exports.getAllTours = (req, res) => {
 };
 
 exports.getTour = (req, res) => {
-  //req.params (query) automatically assigns values to our variable (eg: /:id)
-  //if we want to make the parameter option just add ? to the end (eg: /:id?)
   const id = +req.params.id;
   const tour = tours.find((el) => el.id === id);
 
