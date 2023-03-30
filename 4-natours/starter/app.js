@@ -1,126 +1,34 @@
-const fs = require('fs');
 const express = require('express');
+const morgan = require('morgan');
+const tourRouter = require('./routes/tourRoutes');
+const userRouter = require('./routes/userRoutes');
 const app = express();
+
+//////////MIDDLEWARES///////////
+//3rd party middleware
+app.use(morgan('dev'));
 app.use(express.json()); //Middleware can modify the incoming request data it stands between request and response
+app.use(express.static(`${__dirname}/public`)); //Middleware to serve static file from a folder
 
-//When using json method we automatically set text content to json
-/*
-app.get('/', (req, res) => {
-  res
-    .status(200)
-    .json({ message: 'Hello from the server side!', app: 'Natours' });
+//Creating global middleware
+//Middleware will aplly to EVERY request because we didn't specify any route
+//Middleware will run in oreder defined by the code
+//If this was in the end it wouldn't run because we have middleware that sends the response
+app.use((req, res, next) => {
+  console.log('Hello from the middleware!');
+  //If we don't use next client will never get a response because the next function tells the code to go to the next stage
+  next();
 });
 
-app.post('/', (req, res) => {
-  res.send('You can post to this endpoint...');
+app.use((req, res, next) => {
+  req.requestTime = new Date().toISOString();
+  next();
 });
-*/
 
-const port = 3000;
-//We should always include the version of the API
-//JSON.parse converts json files into JS objects
-const tours = JSON.parse(
-  fs.readFileSync(`${__dirname}/dev-data/data/tours-simple.json`)
-);
+///////ROUTES//////
+//Mounting routers //these are middleware only usable in the specific routes
 
-//HANDLERS
+app.use('/api/v1/tours', tourRouter);
+app.use('/api/v1/users', userRouter);
 
-const getAllTours = (req, res) => {
-  res.status(200).json({
-    status: 'success',
-    results: tours.length,
-    data: { tours },
-  });
-};
-
-const getTour = (req, res) => {
-  //req.params (query) automatically assigns values to our variable (eg: /:id)
-  //if we want tomake the parameter option just add ? to the end (eg: /:id?)
-  const id = +req.params.id;
-  const tour = tours.find((el) => el.id === id);
-
-  //if (id > tours.length) {
-  if (!tour) {
-    return res.status(404).json({
-      status: 'fail',
-      message: 'Invalid ID',
-    });
-  }
-
-  //console.log(req.params);
-  res.status(200).json({
-    status: 'success',
-    data: { tour },
-  });
-};
-
-const createTour = (req, res) => {
-  //console.log(req.body);
-
-  const newId = tours[tours.length - 1].id + 1;
-  const newTour = Object.assign({ id: newId }, req.body);
-
-  tours.push(newTour);
-  fs.writeFile(
-    `${__dirname}/dev-data/data/tours-simple.json`,
-    JSON.stringify(tours),
-    (err) => {
-      res.status(201).json({
-        status: 'success',
-        data: {
-          tour: newTour,
-        },
-      });
-    }
-  );
-};
-
-const updateTour = (req, res) => {
-  if (+req.params.id > tours.length) {
-    return res.status(404).json({
-      status: 'fail',
-      message: 'Invalid ID',
-    });
-  }
-
-  res.status(200).json({
-    status: 'success',
-    data: {
-      tour: '<Updated tour here...>',
-    },
-  });
-};
-
-const deleteTour = (req, res) => {
-  if (+req.params.id > tours.length) {
-    return res.status(404).json({
-      status: 'fail',
-      message: 'Invalid ID',
-    });
-  }
-
-  res.status(204).json({
-    status: 'success',
-    data: null,
-  });
-};
-
-///////ROUTING//////
-
-//app.get('/api/v1/tours', getAllTours);
-//app.get('/api/v1/tours/:id', getTour);
-//app.post('/api/v1/tours', createTour);
-//app.patch('/api/v1/tours/:id', updateTour);
-//app.delete('/api/v1/tours/:id', deleteTour);
-
-app.route('/api/v1/tours').get(getAllTours).post(createTour);
-
-app
-  .route('/api/v1/tours/:id')
-  .get(getTour)
-  .patch(updateTour)
-  .delete(deleteTour);
-
-app.listen(port, () => {
-  console.log(`App running on port ${port}`);
-});
+module.exports = app;
