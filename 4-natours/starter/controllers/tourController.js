@@ -1,39 +1,66 @@
-const { query } = require('express');
 const Tour = require('../models/tourModel');
+
+exports.aliasTopTours = (req, res, next) => {
+  req.query.limit = '5';
+  req.query.sort = '-ratingsAverage,price';
+  req.query.fields = 'name,price,ratingsAverage,summary,difficulty';
+  next();
+};
 
 exports.getAllTours = async (req, res) => {
   try {
-    //Query strings always start with ? and then you have the key values (eg: ?duration=5&difficulty=easy)
-    //In postman it will be easier because querys appear in query params
+    //BUILD QUERY
+    //1A) Filtering
+    const { page, sort, limit, fields, ...queryObj } = req.query;
 
-    //If we don't specify nothing in find method it will return all tours
-
-    //Option 1
-    // const tours = await Tour.find({
-    //   duration: 5,
-    //   difficulty: 'easy',
+    //const queryObj = { ...req.query };
+    // const excludeFields = ['page', 'sort', 'limit', 'fields'];
+    // excludeFields.forEach((el) => {
+    //   delete queryObj[el];
     // });
 
-    //Option 2
-    // const tours = await Tour.find()
-    //   .where('duration')
-    //   .equals(5)
-    //   .where('difficulty')
-    //   .equals('easy');
+    //1B) Advanced Filtering
+    let queryStr = JSON.stringify(queryObj);
+    //gte, gt, lte, lt
+    queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, (match) => `$${match}`);
+    console.log(JSON.parse(queryStr));
+    //{ difficulty: 'easy', duration: {$gte: 5 }}
+    //{ difficulty: 'easy', duration: { gte: '5' }} //cl (req.query)
+    let query = Tour.find(JSON.parse(queryStr));
 
-    //Option 3 because req.query equals an object similar to option 1
-    //Create a new object ignoring certain queries like pagination/sorting/filtering
-    //BUILD QUERY
-    const queryObj = { ...req.query };
-    const excludeFields = ['page', 'sort', 'limit', 'fields'];
-    excludeFields.forEach((el) => {
-      delete queryObj[el];
-    });
-    console.log(req.query, queryObj);
+    //2) Sorting
+    if (sort) {
+      //127.0.0.1:3000/api/v1/tours?sort=-price,ratingsAverage
+      const sortBy = sort.split(',').join(' ');
+      //console.log(sort); //-price,ratingsAverage
+      //console.log(sortBy); //-price ratingAverage
+      query = query.sort(sortBy);
+    } else {
+      query = query.sort('-createdAt _id');
+    }
 
-    const query = Tour.find(queryObj);
+    //3) Field Limiting (only shows information we want to show)
+    if (fields) {
+      query = query.select(fields.split(',').join(' '));
+    } else {
+      //When using minus (-) in the select method it will exclude the v
+      query = query.select('-__v');
+    }
+
+    //4) Pagination
+    const pageNum = +page || 1;
+    const limitNum = +limit || 100;
+    const skip = (pageNum - 1) * limit;
+    //?page=2&limit=10, 1-10 page 1, 11-20 page 2,...
+    //We need to skip 10 results to go to page 2
+    query = query.skip(skip).limit(limitNum);
+
+    if (page) {
+      const numTours = await Tour.countDocuments();
+      if (skip >= numTours) throw new Error('This page does not exist');
+    }
+
     //EXECUTE QUERY
-    //If we await the result of the query it will become impossible to chain more query methods. So you can only use await after the chained methods
     const tours = await query;
 
     //SEND RESPONSE
